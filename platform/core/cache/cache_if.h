@@ -13,8 +13,8 @@ class CacheIf:public ModuleIf{
     public:
     virtual void Reset() = 0;
     virtual void Flush() = 0;
-    virtual void Read(const uint32_t address, uint8_t* buffer, const uint32_t size) = 0;
-    virtual void Write(const uint32_t address, uint8_t* buffer, const uint32_t size) = 0;
+    virtual CACHE_RESULT Read(const uint32_t tag, const uint32_t index, uint8_t* buffer, const uint32_t size) = 0;
+    virtual CACHE_RESULT Write(const uint32_t tag, const uint32_t index, uint8_t* buffer, const uint32_t size) = 0;
 };
 
 #endif /* _CACHE_IF_H_ */

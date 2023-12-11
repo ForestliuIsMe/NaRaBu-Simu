@@ -1,5 +1,7 @@
 #include "fully_asso_cache.h"
 #include "cmath"
+#include <iostream>
+#include <cstring>
 
 template<uint32_t BYTES_PER_CACHE_LINE, uint32_t CACHE_LINE_NUM>
 FullAssoCache<BYTES_PER_CACHE_LINE, CACHE_LINE_NUM>::FullAssoCache(){
@@ -24,7 +26,7 @@ template<uint32_t BYTES_PER_CACHE_LINE, uint32_t CACHE_LINE_NUM>
 CACHE_RESULT FullAssoCache<BYTES_PER_CACHE_LINE, CACHE_LINE_NUM>::Read(const uint32_t tag, const uint32_t index, uint8_t* buffer, const uint32_t size){
     // calc offset
     uint32_t offset_bits = log2(BYTES_PER_CACHE_LINE);
-    uint32_t offset_mask = 1 << offset_bits - 1;
+    uint32_t offset_mask = (1 << offset_bits) - 1;
     uint32_t offset = index & offset_mask;
     if(offset + size > CACHE_LINE_NUM){
         // TODO(fatal)
@@ -49,7 +51,7 @@ template<uint32_t BYTES_PER_CACHE_LINE, uint32_t CACHE_LINE_NUM>
 CACHE_RESULT FullAssoCache<BYTES_PER_CACHE_LINE, CACHE_LINE_NUM>::Write(const uint32_t tag, const uint32_t index, uint8_t* buffer, const uint32_t size){
     // calc offset
     uint32_t offset_bits = log2(BYTES_PER_CACHE_LINE);
-    uint32_t offset_mask = 1 << offset_bits - 1;
+    uint32_t offset_mask = (1 << offset_bits) - 1;
     uint32_t offset = index & offset_mask;
     if(offset + size > CACHE_LINE_NUM){
         // TODO(fatal)
@@ -92,7 +94,10 @@ void FullAssoCache<BYTES_PER_CACHE_LINE, CACHE_LINE_NUM>::Update(uint32_t access
     // p-lru
     // 从后面开始倒推
     uint32_t access_way_bit = access_way / 2;
-    plru_bits[access_way_bit] = !plru_bits[access_way_bit];
+    // 如果当前bit指向了当前的位置
+    if(plru_bits[access_way_bit] == access_way % 2){
+        plru_bits[access_way_bit] = !plru_bits[access_way_bit];
+    }
     // 该level总占的bit个数就是 cache_line_num/2^level
     uint32_t plru_bit_stride = CACHE_LINE_NUM / (1 << (level+1));
     if(plru_bit_stride == 1){
@@ -110,20 +115,39 @@ uint32_t FullAssoCache<BYTES_PER_CACHE_LINE, CACHE_LINE_NUM>::VictimLine(uint32_
     uint32_t total_level = log2(CACHE_LINE_NUM);
     uint32_t actually_level = total_level - 1 - level;
     
-    uint32_t level_stride = CACHE_LINE_NUM / (1 << level);
-    uint32_t level_start_idx = CACHE_LINE_NUM - CACHE_LINE_NUM / (1 << level);
+    uint32_t level_stride = CACHE_LINE_NUM / (1 << actually_level);
+    uint32_t level_start_idx = CACHE_LINE_NUM - level_stride;
 
     // 查找当前bit是否是正，如果为0，则取下部分，如果是1，取上部分
-    uint32_t next_level_offset = offset*2 + plru_bits_[level_start_idx + offset]?
-                            1:0;
+    uint32_t next_level_offset = offset*2 + (plru_bits_[level_start_idx + offset]?1:0);
     // 计算当前level每个block有几个line
-    uint32_t per_line_each_block = CACHE_LINE_NUM/actually_level;
+    uint32_t per_line_each_block = 1 << (total_level-level-1);
     uint32_t block_sel = plru_bits_[level_start_idx + offset]?1:0;
-    // 如果当前是最后一个level
+    // 如果当前是最后一个level 
     if(per_line_each_block == 1){
         return block_sel;
     }
     // 递归查找下一个level
     return block_sel*per_line_each_block + VictimLine(level+1,next_level_offset);
 }
+
+template<uint32_t BYTES_PER_CACHE_LINE, uint32_t CACHE_LINE_NUM>
+void FullAssoCache<BYTES_PER_CACHE_LINE, CACHE_LINE_NUM>::Test(){
+    for(unsigned i = 0; i < 32 ;i++){
+        std::cout<<"Update : "<<i%8<<std::endl;
+        Update(i%8,0,plru_bits_);
+        std::cout<<"Level 0: "<<plru_bits_[0]<<", "<<plru_bits_[1]<<", "<<plru_bits_[2]<<", "<<plru_bits_[3]<<std::endl;
+        std::cout<<"Level 1: "<<plru_bits_[4]<<", "<<plru_bits_[5]<<std::endl;
+        std::cout<<"Level 2: "<<plru_bits_[6]<<std::endl;
+        std::cout<<"Victim:"<<std::endl<<VictimLine()<<std::endl;
+        std::cout<<"============"<<std::endl;
+    }
+}
+
+int main(){
+    FullAssoCache<1,8> cache;
+    cache.Test();
+}
+
+
 

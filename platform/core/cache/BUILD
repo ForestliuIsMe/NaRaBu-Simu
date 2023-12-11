@@ -22,3 +22,16 @@ cc_library(
     ],
     visibility = ["//visibility:public"]
 )
+
+cc_binary(
+    name = "fully_asso_cache_test",
+    srcs = [
+        "fully_asso_cache.cc",
+        "fully_asso_cache.h",
+    ],
+    deps = [
+        ":cache_if",
+    ],
+    visibility = ["//visibility:public"]
+)
+
